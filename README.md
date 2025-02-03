@@ -19,6 +19,6 @@ docker run -v C:\Users\nemun\OneDrive\Projects\tmik_bgm_conditional_melody_gener
 uv run melody_generation.py --load_path ./checkpoints/checkpoint.pth --gen_seed 0 --bgm_filepath ./testdata/test.mid
 ```
 
---load_path: GETMusicのcheckpointへのパス
---gen_seed: seedを指定する場合に使用。指定しなければ1~1e10の範囲のランダムなseedが選ばれる
+--load_path: GETMusicのcheckpointへのパス  
+--gen_seed: seedを指定する場合に使用。指定しなければ1~1e10の範囲のランダムなseedが選ばれる  
 --bgm_filepath: バックミュージックへのパス。[.wav, .mp3, .mid, .midi]に対応
