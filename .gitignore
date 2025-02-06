@@ -14,7 +14,11 @@ getmusic/modeling/__pycache__
 getmusic/utils/__pycache__
 
 results
-testdata
+
+testdata/test_short.wav
+testdata/test11.wav
+
+testoutput
 
 docker_setup.md
 dockerfile_orig.txt
@@ -23,4 +27,5 @@ hello.py
 
 melody.mid
 
+raw_midi.mid
 tmp.mid

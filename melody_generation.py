@@ -1,5 +1,8 @@
 import argparse
 import os
+import json
+import copy
+import shutil
 import random
 import datetime
 import warnings
@@ -13,6 +16,8 @@ from getmusic.engine.logger import Logger
 from getmusic.engine.solver import Solver
 from getmusic.distributed.launch import launch
 import numpy  as np
+import librosa
+import soundfile as sf
 import pickle
 import miditoolkit
 import math
@@ -26,13 +31,22 @@ from utils.information import Information, Informations
 from utils.midi_processing import CustomPrettyMIDI
 from utils.wav_processing import Wav
 
-import madmom
+from make_midi_from_chroma.make_midi_from_chroma import make_midi_from_chroma
+
 
 TMP_MIDIFILE = "./tmp.mid"
+OUTPUT_SR = 44100
+MELODY_WEIGHT = 0.5
 MIN_GEN_SEED = 0
 MAX_GEN_SEED = 1e10
 AUDIO_FILENAME_EXTENSIONS = [".wav", ".mp3"]
 MIDI_FILENAME_EXTENSIONS = [".midi", ".mid"]
+
+SIXTEENTH_TIMES_AND_COUNTINGS_OUTPUT_FILENAME = "sixteenth_times_and_countings.json"
+QUANTIZED_MELODY_MIDI_OUTPUT_FILENAME = "quantized_melody.mid"
+REALTIME_MELODY_MIDI_OUTPUT_FILENAME = "realtime_melody.mid"
+MELODY_AUDIO_OUTPUT_FILENAME = "melody.wav"
+MIXED_AUDIO_OUTPUT_FILENAME = "mix.wav"
 
 NODE_RANK = os.environ['INDEX'] if 'INDEX' in os.environ else 0
 NODE_RANK = int(NODE_RANK)
@@ -44,6 +58,16 @@ NUM_NODE = os.environ['HOST_NUM'] if 'HOST_NUM' in os.environ else 1
 inst_to_row = { '80':0, '32':1, '128':2,  '25':3, '0':4, '48':5, '129':6}
 prog_to_abrv = {'0':'P','25':'G','32':'B','48':'S','80':'M','128':'D'}
 track_name = ['lead', 'bass', 'drum', 'guitar', 'piano', 'string']
+
+c2info = {
+    "l": {"track_id": 0, "add_to_conditional_inst": True, "program_num": '80'},
+    "b": {"track_id": 1, "add_to_conditional_inst": True, "program_num": '32'},
+    "d": {"track_id": 2, "add_to_conditional_inst": False, "program_num": None},
+    "g": {"track_id": 3, "add_to_conditional_inst": True, "program_num": '25'},
+    "p": {"track_id": 4, "add_to_conditional_inst": True, "program_num": '0'},
+    "s": {"track_id": 5, "add_to_conditional_inst": True, "program_num": '48'},
+    "c": {"track_id": 6, "add_to_conditional_inst": False, "program_num": None}
+}
 
 root_dict = {'C': 0, 'C#': 1, 'D': 2, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'G': 7, 'Ab': 8, 'A': 9, 'Bb': 10, 'B': 11}
 kind_dict = {'null': 0, 'm': 1, '+': 2, 'dim': 3, 'seven': 4, 'maj7': 5, 'm7': 6, 'm7b5': 7}
@@ -190,6 +214,8 @@ def get_args():
 
     args.cwd = os.path.abspath(os.path.dirname(__file__))
 
+    if os.path.exists(args.output_dir):
+        shutil.rmtree(args.output_dir)
     os.makedirs(args.output_dir, exist_ok=True)
 
     if args.name == '':
@@ -637,16 +663,6 @@ def F(file_name, conditional_tracks, content_tracks, condition_inst, chord_from_
 
     return datum.unsqueeze(0), torch.tensor(tempo), not_empty_pos, conditional_bool, pitch_shift, tpc, have_cond
 
-
-def downbeat_estimation(audiofile_path, beats_per_bar_candidates=[4], fps=100):
-    # downbeat estimation by madmom
-    proc = madmom.features.downbeats.DBNDownBeatTrackingProcessor(beats_per_bar=beats_per_bar_candidates, fps=fps)
-    act = madmom.features.downbeats.RNNDownBeatProcessor()(audiofile_path)
-    beat_times_and_countings = proc(act)
-
-    return beat_times_and_countings
-
-
 def aggregate_tracks(midi):
     # 参照 http://www.synapse.ne.jp/seiji/music/midi/gm.html https://ja.wikipedia.org/wiki/General_MIDI
 
@@ -736,13 +752,50 @@ def aggregate_tracks(midi):
 
     return midi
 
+def convert_quantized_time_to_real_time(midi, clipped_sixteenth_times_and_countings):
+    midi_real_time = copy.deepcopy(midi)
+    sixteenth_unit_tick = midi_real_time.resolution / 4
+
+    targets = [i for i in range(len(midi_real_time.instruments))]
+    for target in targets:
+        for i, note in enumerate(midi_real_time.instruments[target].notes):
+
+            note_start_tick = midi_real_time.time_to_tick(note.start)
+            note_start_idx = min(round(note_start_tick / sixteenth_unit_tick), len(clipped_sixteenth_times_and_countings) - 1)
+            note_start_real_time = clipped_sixteenth_times_and_countings[note_start_idx][0]
+
+            note_end_tick = midi_real_time.time_to_tick(note.end)
+            note_end_idx = min(round(note_end_tick / sixteenth_unit_tick), len(clipped_sixteenth_times_and_countings) - 1)
+            note_end_real_time = clipped_sixteenth_times_and_countings[note_end_idx][0]
+
+            midi_real_time.instruments[target].notes[i].start = note_start_real_time
+            midi_real_time.instruments[target].notes[i].end = note_end_real_time
+
+    midi_real_time.remove_invalid_notes()
+
+    return midi_real_time
+
+def mix_audio(audio1, audio2, weight1=1.0, weight2=1.0):
+
+    if audio1.ndim == 2:
+        audio1 = np.mean(audio1, axis=1)
+    if audio2.ndim == 2:
+        audio2 = np.mean(audio2, axis=1)
+
+    max_length = max(len(audio1), len(audio2))
+    audio1 = np.pad(audio1, (0, max_length - len(audio1)), mode='constant', constant_values=0)
+    audio2 = np.pad(audio2, (0, max_length - len(audio2)), mode='constant', constant_values=0)
+
+    mixed_audio = (audio1 * weight1 + audio2 * weight2) / (weight1 + weight2)
+    mixed_audio = np.clip(mixed_audio, -1.0, 1.0)
+
+    return mixed_audio
+
 
 def main():
 
     ## prepare
     args = get_args()
-
-    downbeat_estimation("./testdata/test.wav")
 
     torch.cuda.set_device(0)
     args.ngpus_per_node = 1
@@ -782,9 +835,9 @@ def main():
     assert args.load_path is not None
     solver.resume(path=args.load_path)
 
-    seed = args.gen_seed
 
     ## set seed
+    seed = args.gen_seed
     seed_everything(seed, args.cudnn_deterministic)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
@@ -793,65 +846,48 @@ def main():
     torch.cuda.manual_seed_all(seed)
 
 
-    # snippets from Original GETMusic
-    orig_midifile_path = args.bgm_filepath
-    midi = CustomPrettyMIDI(midi_file=orig_midifile_path)
-    midi = aggregate_tracks(midi)
-    midi.write(filename=TMP_MIDIFILE)
+    # prepare conditonal midi
+    if args.from_audio:
+        conditional_midi, clipped_sixteenth_times_and_countings = \
+            make_midi_from_chroma(audio_file_path=args.bgm_filepath)
+        with open(os.path.join(args.output_dir, SIXTEENTH_TIMES_AND_COUNTINGS_OUTPUT_FILENAME), "w") as file:
+            json.dump(clipped_sixteenth_times_and_countings, file)
+    else:
+        conditional_midi = CustomPrettyMIDI(midi_file=args.bgm_filepath)
+
+    conditional_midi = aggregate_tracks(conditional_midi)
+    conditional_midi.write(filename=TMP_MIDIFILE)
     file_name = TMP_MIDIFILE
 
-    conditional_track = np.array([False, False, False, False, False, False, True])
+
+    # specify which track is conditional or content
+    conditional_track = np.array([False, False, False, False, False, False, False])
     conditional_name = args.conditional_name
     condition_inst = []
-    if 'l' in conditional_name:
-        conditional_track[0] = True
-        condition_inst.append('80')
-    if 'b' in conditional_name:
-        conditional_track[1] = True
-        condition_inst.append('32')
-    if 'd' in conditional_name:
-        conditional_track[2] = True
-    if 'g' in conditional_name:
-        conditional_track[3] = True
-        condition_inst.append('25')
-    if 'p' in conditional_name:
-        conditional_track[4] = True
-        condition_inst.append('0')
-    if 's' in conditional_name:
-        conditional_track[5] = True
-        condition_inst.append('48')
-    # if 'c' in conditional_name:
-    #     conditional_track[6] = True
-
-    if all(conditional_track):
-        print('You can\'t set all tracks as condition. We conduct uncontional generation based on selected content tracks. If you skip content tracks, this song is skipped.')
+    for c, info in c2info.items():
+        if c in conditional_name:
+            conditional_track[info["track_id"]] = True
+            if info["add_to_conditional_inst"]:
+                condition_inst.append(info["program_num"])
 
     content_track = np.array([False, False, False, False, False, False, False])
     content_name = args.content_name
-    if 'l' in content_name:
-        content_track[0] = True
-    if 'b' in content_name:
-        content_track[1] = True
-    if 'd' in content_name:
-        content_track[2] = True
-    if 'g' in content_name:
-        content_track[3] = True
-    if 'p' in content_name:
-        content_track[4] = True
-    if 's' in content_name:
-        content_track[5] = True
+    for c, info in c2info.items():
+        if c in content_name:
+            content_track[info["track_id"]] = True
 
     if all(conditional_track):
         print('You can\'t set all tracks as condition. We conduct uncontional generation based on selected content tracks.')
         conditional_track = np.array([False, False, False, False, False, False, False])
         if not any(content_track):
-            print('No content tracks is selected. skip this song')
+            assert False, 'No content tracks is selected. skip this song'
 
+
+    # generation
     x, tempo, not_empty_pos, condition_pos, pitch_shift, tpc, have_cond = F(file_name, conditional_track, content_track, condition_inst, args.chord_from_single)
 
     if not have_cond:
-        print('chord error')
-
+        assert False, "there exists the track that is specified as conditional inst but doesn't have any note in its track."
 
     oct_line = solver.infer_sample(x, tempo, not_empty_pos, condition_pos, use_ema=args.no_ema)
 
@@ -870,77 +906,45 @@ def main():
 
     midi_obj = encoding_to_MIDI(oct_final, tpc, args.decode_chord)
 
+
     # remove tracks except for lead track
     has_lead_track = False
     for instrument in midi_obj.instruments:
-        if instrument.program == 80:
+        if instrument.program == int(c2info["l"]["program_num"]):
             midi_obj.instruments = [instrument]
             has_lead_track = True
     if not has_lead_track:
-        print("generated track doesn't have lead track. So skip.")
+        print("!generated track doesn't have lead track. So the following processes will be carried out with an empty track")
+        midi_obj.instruments = [miditoolkit.midi.containers.Instrument(program=int(c2info["l"]["program_num"]), is_drum=False)]
 
-
-    # I don't know why, but TempoChange of wrong bpm forcibly added to MIDI, so remove it.
-    midi_obj.tempo_changes = midi_obj.tempo_changes[:-1]
 
     # notes arrangements
+    midi_obj.tempo_changes = midi_obj.tempo_changes[:-1] # I don't know why, but TempoChange of wrong bpm forcibly added to MIDI, so remove it.
     midi_obj.dump(TMP_MIDIFILE)
-    midi = CustomPrettyMIDI(midi_file=TMP_MIDIFILE)
-    midi.perfect_monophonize(targets="all")
-    midi.whole_shift(targets="all", sex="female")
-    midi.note_shift(targets="all", sex="female")
-    midi.invert_leap_notes_until_convergence(targets="all")
-    midi.note_shift(targets="all", sex="female")
-    midi.remove_invalid_notes()
-
-    midi.write(filename="./melody.mid")
-
-    # count note num
-    # note_num = 0
-    # for instrument in midi.instruments:
-    #     if instrument.program == 80:
-    #         note_num = len(instrument.notes)
-
-    # good_melody check
-        # notes_kind_variety_score = midi.notes_kind_variety_scores(targets="all")[0]
-        # use_various_notes = notes_kind_variety_score >= NOTES_KIND_VARIETY_SCORE_TH
-
-        # breath_score = midi.breath_scores(targets="all")[0]
-        # has_breath_timing = breath_score >= BREATH_SCORE_TH
-
-        # has_enough_notes = note_num >= MIN_NOTES_NUM_PER_BAR_FOR_GOOD_MELODY * information.bars_num
-
-        # is_good_melody = use_various_notes and has_breath_timing and has_enough_notes
-
-        # if not is_good_melody:
-        #     print("generated melody doesn't satisfy the requirements for good melody, so skip.")
-        #     informations.informations[information_id] = information
-        #     informations.write()
-        #     continue
+    melody_midi = CustomPrettyMIDI(midi_file=TMP_MIDIFILE)
+    melody_midi.perfect_monophonize(targets="all")
+    melody_midi.remove_invalid_notes()
+    melody_midi.write(filename=os.path.join(args.output_dir, QUANTIZED_MELODY_MIDI_OUTPUT_FILENAME))
 
 
-    # # save midi
-    # sorted_melodyfile_tuple = sorted([(int(melody_id), melody_info) for melody_id, melody_info in information.melodies.items()], 
-    #                                     key = lambda x: x[0])
-    # melody_id = sorted_melodyfile_tuple[-1][0] + 1 if len(sorted_melodyfile_tuple) > 0 else 0
-    # save_dir = f"{args.output_dir}/{information.backmusic_midifile_path.split('/')[-1].split('.')[0]}"
-    # os.makedirs(save_dir, exist_ok=True)
-    # save_path = f"{save_dir}/{melody_id}.mid"
+    # mix
+    if args.from_audio:
+        melody_midi_real_time = \
+            convert_quantized_time_to_real_time(midi=melody_midi, clipped_sixteenth_times_and_countings=clipped_sixteenth_times_and_countings)
+        melody_midi_real_time.write(filename=os.path.join(args.output_dir, REALTIME_MELODY_MIDI_OUTPUT_FILENAME))
 
-    # midi.write(filename=save_path)
+        bgm_audio, _ = librosa.load(args.bgm_filepath, sr=OUTPUT_SR)
+        melody_audio = melody_midi_real_time.fluidsynth(fs=OUTPUT_SR)
 
+    else:
+        bgm_midi = CustomPrettyMIDI(midi_file=args.bgm_filepath)
+        bgm_audio = bgm_midi.fluidsynth(fs=OUTPUT_SR)
+        melody_audio = melody_midi.fluidsynth(fs=OUTPUT_SR)
 
-    # # record to informations
-    # information.melodies[melody_id] = {
-    #     "seed": seed,
-    #     "note_num": note_num,
-    #     "sex": "female",
-    #     "notes_kind_variety_score": notes_kind_variety_score if not args.skip_rulebased_melody_filtering else None,
-    #     "breath_score": breath_score if not args.skip_rulebased_melody_filtering else None,
-    #     "melody_midifile_path": save_path,
-    # }
-    # informations.informations[information_id] = information
-    # informations.write()
+    mixed_audio = mix_audio(bgm_audio, melody_audio, weight2=MELODY_WEIGHT)
+
+    sf.write(os.path.join(args.output_dir, MELODY_AUDIO_OUTPUT_FILENAME), melody_audio, OUTPUT_SR)
+    sf.write(os.path.join(args.output_dir, MIXED_AUDIO_OUTPUT_FILENAME), mixed_audio, OUTPUT_SR)
 
 
 if __name__ == '__main__':

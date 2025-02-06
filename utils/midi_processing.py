@@ -247,7 +247,7 @@ class CustomPrettyMIDI(pretty_midi.PrettyMIDI):
                 List of indices, which indicate id of target instrument for 'monophonization' in self.instruments.
                 Each index must be less than length of self.instruments.
                 If you want to qmonophonize all instruments, you can set targets as "all".
-            
+
             sex : str
                 Supposed singer's sex.
                 For example, if you set 'sex' as 'female', the range of note pitches is shifted to fit the range of female voice.
@@ -329,7 +329,7 @@ class CustomPrettyMIDI(pretty_midi.PrettyMIDI):
                 List of indices, which indicate id of target instrument for 'monophonization' in self.instruments.
                 Each index must be less than length of self.instruments.
                 If you want to qmonophonize all instruments, you can set targets as "all".
-            
+
             sex : str
                 Supposed singer's sex.
                 For example, if you set 'sex' as 'female', the range of note pitches is shifted to fit the range of female voice.
@@ -394,7 +394,7 @@ class CustomPrettyMIDI(pretty_midi.PrettyMIDI):
                 List of indices, which indicate id of target instrument for 'monophonization' in self.instruments.
                 Each index must be less than length of self.instruments.
                 If you want to qmonophonize all instruments, you can set targets as "all".
-            
+
             num_of_loop : int
                 How many times to execute _invert_leap_notes().
                 The larger it is, the more likely the end result will converge.(while the computational cost increases)
@@ -459,156 +459,3 @@ class CustomPrettyMIDI(pretty_midi.PrettyMIDI):
 
             self.instruments[target].notes = new_notes
 
-
-    def notes_kind_variety_scores(
-        self,
-        targets: str | list[int]
-    ):
-        '''Caliculate note's kind avg count.
-        Supposed to used to check if the target track uses various notes, which is a requirement for a good melody.
-
-        Parameters
-        ----------
-            targets : str | list[int]
-                List of indices, which indicate id of target instrument for 'monophonization' in self.instruments.
-                Each index must be less than length of self.instruments.
-                If you want to qmonophonize all instruments, you can set targets as "all".
-
-        Returns
-            scores : list[float]
-                List of float, which indicate used note's kind avg count.
-                Each score corresponds to the target track of 'targets'.
-        ----------
-
-        '''
-        REST = -1
-        SCOPE_SIZE_TICK = self.resolution * 8 # scope size is same as the length of eight quarter notes.
-        HOP_LENGTH = self.resolution // 4 # hop length is same as the length of a 16th note.
-
-        if isinstance(targets, str):
-            assert targets == "all"
-            targets = [i for i in range(len(self.instruments))]
-        elif isinstance(targets, list):
-            for target in targets:
-                assert isinstance(target, int)
-                assert target < len(self.instruments)
-        else:
-            assert False, "targets should be 'all' or <list[int]>"
-
-        scores = []
-        for target in targets:
-            end_time = self.instruments[target].get_end_time()
-
-            # record to matrix to monophonize
-            pitch_matrix = np.array([REST for _ in range(self.time_to_tick(end_time))], dtype="int")
-            vel_matrix = np.array([REST for _ in range(self.time_to_tick(end_time))], dtype="int")
-            id_matrix = np.array([REST for _ in range(self.time_to_tick(end_time))], dtype="int")
-
-            for note_id, note in enumerate(self.instruments[target].notes):
-                start_tick = self.time_to_tick(note.start)
-                end_tick = self.time_to_tick(note.end)
-
-                pitch_matrix[start_tick:end_tick] = note.pitch
-                vel_matrix[start_tick:end_tick] = note.velocity
-                id_matrix[start_tick:end_tick] = note_id
-
-            # main process
-            used_notes_kinds = []
-            current_tick = 0
-            while current_tick + SCOPE_SIZE_TICK <= self.time_to_tick(end_time):
-                pitch_matrix_scope = pitch_matrix[current_tick:current_tick + SCOPE_SIZE_TICK]
-                pitch_matrix_scope_set = set(pitch_matrix_scope)
-                pitch_matrix_scope_set.discard(REST)
-                used_notes_kinds.append(len(pitch_matrix_scope_set))
-
-                current_tick += HOP_LENGTH
-
-            if len(used_notes_kinds) > 0:
-                scores.append(sum(used_notes_kinds)/len(used_notes_kinds))
-            else:
-                # when the scope size is too large relative to the track length, return results for the entire track
-                pitch_matrix_scope = pitch_matrix[current_tick:current_tick + SCOPE_SIZE_TICK]
-                pitch_matrix_scope_set = set(pitch_matrix_scope)
-                pitch_matrix_scope_set.discard(REST)
-                scores.append(len(pitch_matrix_scope_set))
-
-        return scores
-
-
-    def breath_scores(
-        self,
-        targets: str | list[int]
-    ):
-        '''Caliculate ratio of the scopes which has breath timing of all scopes
-        Supposed to used to check if the target track is albe to be sung.
-
-        Parameters
-        ----------
-            targets : str | list[int]
-                List of indices, which indicate id of target instrument for 'monophonization' in self.instruments.
-                Each index must be less than length of self.instruments.
-                If you want to qmonophonize all instruments, you can set targets as "all".
-
-        Returns
-            scores : list[float]
-                List of float, which indicate the ratio of scope which has breath timing of all scopes.
-                Each score corresponds to the target track of 'targets'.
-        ----------
-
-        '''
-        REST = -1
-        SCOPE_SIZE_TICK = self.resolution * 8 # scope size is same as the length of eight quarter notes.
-        HOP_LENGTH = self.resolution // 4 # hop length is same as the length of a 16th note.
-
-        if isinstance(targets, str):
-            assert targets == "all"
-            targets = [i for i in range(len(self.instruments))]
-        elif isinstance(targets, list):
-            for target in targets:
-                assert isinstance(target, int)
-                assert target < len(self.instruments)
-        else:
-            assert False, "targets should be 'all' or <list[int]>"
-
-        scores = []
-        for target in targets:
-            end_time = self.instruments[target].get_end_time()
-
-            # record to matrix to monophonize
-            pitch_matrix = np.array([REST for _ in range(self.time_to_tick(end_time))], dtype="int")
-            vel_matrix = np.array([REST for _ in range(self.time_to_tick(end_time))], dtype="int")
-            id_matrix = np.array([REST for _ in range(self.time_to_tick(end_time))], dtype="int")
-
-            for note_id, note in enumerate(self.instruments[target].notes):
-                start_tick = self.time_to_tick(note.start)
-                end_tick = self.time_to_tick(note.end)
-
-                pitch_matrix[start_tick:end_tick] = note.pitch
-                vel_matrix[start_tick:end_tick] = note.velocity
-                id_matrix[start_tick:end_tick] = note_id
-
-            # main process
-            count_of_scopes_which_has_breath_timing = 0
-            count_of_all_scopes = 0
-            current_tick = 0
-            while current_tick + SCOPE_SIZE_TICK <= self.time_to_tick(end_time):
-                pitch_matrix_scope = pitch_matrix[current_tick:current_tick + SCOPE_SIZE_TICK]
-                pitch_matrix_scope_set = set(pitch_matrix_scope)
-                if REST in pitch_matrix_scope_set:
-                    count_of_scopes_which_has_breath_timing += 1
-
-                count_of_all_scopes += 1
-                current_tick += HOP_LENGTH
-
-            if count_of_all_scopes > 0:
-                scores.append(count_of_scopes_which_has_breath_timing/count_of_all_scopes)
-            else:
-                # when the scope size is too large relative to the track length, return results for the entire track
-                pitch_matrix_scope = pitch_matrix[current_tick:current_tick + SCOPE_SIZE_TICK]
-                pitch_matrix_scope_set = set(pitch_matrix_scope)
-                if REST in pitch_matrix_scope_set:
-                    scores.append(1.0)
-                else:
-                    scores.append(0.0)
-
-        return scores
