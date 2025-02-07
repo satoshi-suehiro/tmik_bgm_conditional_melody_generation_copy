@@ -315,11 +315,9 @@ class CustomPrettyMIDI(pretty_midi.PrettyMIDI):
 
     def note_shift(
         self,
-        targets: str | list[int],
-        sex: str = "female",
-        pitch_range_kind: str = "normal"
+        targets: str | list[int]
     ):
-        '''shift the pitch of each notes to fit the voice range. 
+        '''shift the pitch of each notes to fit the voice range.
         The pitch name (e.g. C#) doesn't change, only the octave changes.
         It is guaranteed that all notes are within pitch_range after the shift.
 
@@ -329,28 +327,9 @@ class CustomPrettyMIDI(pretty_midi.PrettyMIDI):
                 List of indices, which indicate id of target instrument for 'monophonization' in self.instruments.
                 Each index must be less than length of self.instruments.
                 If you want to qmonophonize all instruments, you can set targets as "all".
-
-            sex : str
-                Supposed singer's sex.
-                For example, if you set 'sex' as 'female', the range of note pitches is shifted to fit the range of female voice.
-                sex must be in ['male', 'female'].
-
-            pitch_range_kind : str
-                Kind of pitch range.
-                For example, if you set 'pitch_range' as 'falsetto', the range of note pitches is shifted to fit the range of falsetto voice.
-                pitch_range must be in ['normal', 'falsetto']
         '''
-        SHIFT_PITCH_RANGE_MALE_NORMAL_MIN = 43 #G2
-        SHIFT_PITCH_RANGE_MALE_NORMAL_MAX = 67 #G4
-
-        SHIFT_PITCH_RANGE_MALE_FALSETTO_MIN = 52 #E3
-        SHIFT_PITCH_RANGE_MALE_FALSETTO_MAX = 76 #E5
-
-        SHIFT_PITCH_RANGE_FEMALE_NORMAL_MIN = 52 #E3
-        SHIFT_PITCH_RANGE_FEMALE_NORMAL_MAX = 72 #C5
-
-        SHIFT_PITCH_RANGE_FEMALE_FALSETTO_MIN = 60 #C4
-        SHIFT_PITCH_RANGE_FEMALE_FALSETTO_MAX = 81 #A5
+        SHIFT_PITCH_RANGE_MIN = 41 #F2
+        SHIFT_PITCH_RANGE_MAX = 81 #A5
 
         if isinstance(targets, str):
             assert targets == "all"
@@ -362,11 +341,8 @@ class CustomPrettyMIDI(pretty_midi.PrettyMIDI):
         else:
             assert False, "targets should be 'all' or <list[int]>"
 
-        assert sex in ["male", "female"]
-        assert pitch_range_kind in ["normal", "falsetto"]
-
-        min_pitch = eval(f"SHIFT_PITCH_RANGE_{sex.upper()}_{pitch_range_kind.upper()}_MIN")
-        max_pitch = eval(f"SHIFT_PITCH_RANGE_{sex.upper()}_{pitch_range_kind.upper()}_MAX")
+        min_pitch = SHIFT_PITCH_RANGE_MIN
+        max_pitch = SHIFT_PITCH_RANGE_MAX
 
         for target in targets:
             for note_id, note in enumerate(self.instruments[target].notes):

@@ -923,6 +923,7 @@ def main():
     midi_obj.dump(TMP_MIDIFILE)
     melody_midi = CustomPrettyMIDI(midi_file=TMP_MIDIFILE)
     melody_midi.perfect_monophonize(targets="all")
+    melody_midi.note_shift(targets="all")
     melody_midi.remove_invalid_notes()
     melody_midi.write(filename=os.path.join(args.output_dir, QUANTIZED_MELODY_MIDI_OUTPUT_FILENAME))
 
