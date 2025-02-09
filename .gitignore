@@ -17,6 +17,9 @@ results
 
 testdata/test_short.wav
 testdata/test11.wav
+testdata/test_changetempo.mid
+testdata/conditional_chords.mid
+testdata/sixteenth_times_and_countings.json
 
 testoutput
 

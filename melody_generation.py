@@ -41,10 +41,11 @@ MIN_GEN_SEED = 0
 MAX_GEN_SEED = 1e10
 AUDIO_FILENAME_EXTENSIONS = [".wav", ".mp3"]
 MIDI_FILENAME_EXTENSIONS = [".midi", ".mid"]
+JSON_FILENAME_EXTENSIONS = [".json"]
 
 SIXTEENTH_TIMES_AND_COUNTINGS_OUTPUT_FILENAME = "sixteenth_times_and_countings.json"
-QUANTIZED_MELODY_MIDI_OUTPUT_FILENAME = "quantized_melody.mid"
-REALTIME_MELODY_MIDI_OUTPUT_FILENAME = "realtime_melody.mid"
+CONDITONAL_CHORDS_OUTPUT_FILENAME = "conditional_chords.mid"
+MELODY_MIDI_OUTPUT_FILENAME = "melody.mid"
 MELODY_AUDIO_OUTPUT_FILENAME = "melody.wav"
 MIXED_AUDIO_OUTPUT_FILENAME = "mix.wav"
 
@@ -190,16 +191,21 @@ def get_args():
 
     parser.add_argument('--output_dir', type=str, default='./results',
                         help='directory to save the melody')
+
     parser.add_argument('--gen_seed', type=int, default=None,
                         help='seed for generation. int. (example) 0')
+
+    parser.add_argument('--output_synth_demo', action="store_true", default=False)
+
+    parser.add_argument('--generate_from_calculated_chords', action="store_true", default=False)
+    parser.add_argument('--sixteenth_times_and_countings_filepath', type=str, default=None)
+    parser.add_argument('--conditional_chords_filepath', type=str, default=None)
 
     parser.add_argument('--load_path', type=str, default=None,
                     help='path to model that need to be loaded, '
                             'used for loading pretrained model')
 
-    parser.add_argument('--bgm_filepath', type=str, required=True,
-                    help='path to model that need to be loaded, '
-                            'used for loading pretrained model')
+    parser.add_argument('--bgm_filepath', type=str, required=True)
 
 
     # args for modify config
@@ -230,19 +236,31 @@ def get_args():
 
     if not os.path.exists(args.bgm_filepath):
         assert False, "The specified bgm filepath does not exist."
-
     filename, file_extension = os.path.splitext(os.path.basename(args.bgm_filepath))
-
     args.filename = filename
     args.file_extension = file_extension
 
-    if file_extension in AUDIO_FILENAME_EXTENSIONS:
+    if args.generate_from_calculated_chords:
+        assert args.sixteenth_times_and_countings_filepath is not None and os.path.exists(args.sixteenth_times_and_countings_filepath), \
+            "if you want to generete from calculated chords, you hove to specify right sixteenth_times_and_countings_filepath"
+        assert os.path.splitext(os.path.basename(args.sixteenth_times_and_countings_filepath))[1] in JSON_FILENAME_EXTENSIONS, \
+            f"Supported extensions for sixteenth_times_and_countings_filepath are: {', '.join(JSON_FILENAME_EXTENSIONS)}"
+        assert args.conditional_chords_filepath is not None and os.path.exists(args.conditional_chords_filepath), \
+            "if you want to generete from calculated chords, you hove to specify right conditional_chords_filepath"
+        assert os.path.splitext(os.path.basename(args.conditional_chords_filepath))[1] in MIDI_FILENAME_EXTENSIONS, \
+            f"Supported extensions for conditional_chords_filepath are: {', '.join(MIDI_FILENAME_EXTENSIONS)}"
+        if args.output_synth_demo:
+            assert file_extension in AUDIO_FILENAME_EXTENSIONS, \
+                "if you want to generete from calculated chords and want to make synth demo, you hove to specify original audio file as bgm file"
         args.from_audio = True
-    elif file_extension in MIDI_FILENAME_EXTENSIONS:
-        args.from_audio = False
     else:
-        assert False, f"Unsupported file extension: {file_extension}. " + \
-                f"Supported extensions are: {', '.join(AUDIO_FILENAME_EXTENSIONS + MIDI_FILENAME_EXTENSIONS)}"
+        if file_extension in AUDIO_FILENAME_EXTENSIONS:
+            args.from_audio = True
+        elif file_extension in MIDI_FILENAME_EXTENSIONS:
+            args.from_audio = False
+        else:
+            assert False, f"Unsupported file extension: {file_extension}. " + \
+                    f"Supported extensions are: {', '.join(AUDIO_FILENAME_EXTENSIONS + MIDI_FILENAME_EXTENSIONS)}"
 
     return args
 
@@ -663,6 +681,11 @@ def F(file_name, conditional_tracks, content_tracks, condition_inst, chord_from_
 
     return datum.unsqueeze(0), torch.tensor(tempo), not_empty_pos, conditional_bool, pitch_shift, tpc, have_cond
 
+def load_json(filepath, encoding='utf-8'):
+    with open(filepath, 'r', encoding=encoding) as file:
+        data = json.load(file)
+    return data
+
 def aggregate_tracks(midi):
     # 参照 http://www.synapse.ne.jp/seiji/music/midi/gm.html https://ja.wikipedia.org/wiki/General_MIDI
 
@@ -848,10 +871,17 @@ def main():
 
     # prepare conditonal midi
     if args.from_audio:
-        conditional_midi, clipped_sixteenth_times_and_countings = \
-            make_midi_from_chroma(audio_file_path=args.bgm_filepath)
+        if args.generate_from_calculated_chords:
+            conditional_midi = CustomPrettyMIDI(midi_file=args.conditional_chords_filepath)
+            clipped_sixteenth_times_and_countings = load_json(filepath=args.sixteenth_times_and_countings_filepath)
+        else:
+            conditional_midi, clipped_sixteenth_times_and_countings = \
+                make_midi_from_chroma(audio_file_path=args.bgm_filepath)
+
         with open(os.path.join(args.output_dir, SIXTEENTH_TIMES_AND_COUNTINGS_OUTPUT_FILENAME), "w") as file:
             json.dump(clipped_sixteenth_times_and_countings, file)
+        conditional_midi.write(filename=os.path.join(args.output_dir, CONDITONAL_CHORDS_OUTPUT_FILENAME))
+
     else:
         conditional_midi = CustomPrettyMIDI(midi_file=args.bgm_filepath)
 
@@ -925,27 +955,25 @@ def main():
     melody_midi.perfect_monophonize(targets="all")
     melody_midi.note_shift(targets="all")
     melody_midi.remove_invalid_notes()
-    melody_midi.write(filename=os.path.join(args.output_dir, QUANTIZED_MELODY_MIDI_OUTPUT_FILENAME))
+    if args.from_audio:
+        melody_midi = \
+            convert_quantized_time_to_real_time(midi=melody_midi, clipped_sixteenth_times_and_countings=clipped_sixteenth_times_and_countings)
+    melody_midi.write(filename=os.path.join(args.output_dir, MELODY_MIDI_OUTPUT_FILENAME))
 
 
     # mix
-    if args.from_audio:
-        melody_midi_real_time = \
-            convert_quantized_time_to_real_time(midi=melody_midi, clipped_sixteenth_times_and_countings=clipped_sixteenth_times_and_countings)
-        melody_midi_real_time.write(filename=os.path.join(args.output_dir, REALTIME_MELODY_MIDI_OUTPUT_FILENAME))
+    if args.output_synth_demo:
+        if args.from_audio:
+            bgm_audio, _ = librosa.load(args.bgm_filepath, sr=OUTPUT_SR)
+        else:
+            bgm_midi = CustomPrettyMIDI(midi_file=args.bgm_filepath)
+            bgm_audio = bgm_midi.fluidsynth(fs=OUTPUT_SR)
 
-        bgm_audio, _ = librosa.load(args.bgm_filepath, sr=OUTPUT_SR)
-        melody_audio = melody_midi_real_time.fluidsynth(fs=OUTPUT_SR)
-
-    else:
-        bgm_midi = CustomPrettyMIDI(midi_file=args.bgm_filepath)
-        bgm_audio = bgm_midi.fluidsynth(fs=OUTPUT_SR)
         melody_audio = melody_midi.fluidsynth(fs=OUTPUT_SR)
+        mixed_audio = mix_audio(bgm_audio, melody_audio, weight2=MELODY_WEIGHT)
 
-    mixed_audio = mix_audio(bgm_audio, melody_audio, weight2=MELODY_WEIGHT)
-
-    sf.write(os.path.join(args.output_dir, MELODY_AUDIO_OUTPUT_FILENAME), melody_audio, OUTPUT_SR)
-    sf.write(os.path.join(args.output_dir, MIXED_AUDIO_OUTPUT_FILENAME), mixed_audio, OUTPUT_SR)
+        sf.write(os.path.join(args.output_dir, MELODY_AUDIO_OUTPUT_FILENAME), melody_audio, OUTPUT_SR)
+        sf.write(os.path.join(args.output_dir, MIXED_AUDIO_OUTPUT_FILENAME), mixed_audio, OUTPUT_SR)
 
 
 if __name__ == '__main__':
