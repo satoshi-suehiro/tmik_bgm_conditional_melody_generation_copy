@@ -798,6 +798,51 @@ def convert_quantized_time_to_real_time(midi, clipped_sixteenth_times_and_counti
 
     return midi_real_time
 
+def compose_dynamic_tempo_midi(midi, clipped_sixteenth_times_and_countings):
+
+    # define const
+    SEC_PER_MIN = 60
+    BEATS_PER_BAR = 4
+    SIXTEENTH_PER_BEAT = 4
+
+    # calclulate offset ticks and sixteenth note's tick
+    offset_tick = int(BEATS_PER_BAR * midi.resolution)
+    sixteenth_tick = midi.resolution / SIXTEENTH_PER_BEAT
+
+    # init
+    dynamic_tempo_midi = copy.deepcopy(midi)
+
+    # add offset bar
+    offset_time = clipped_sixteenth_times_and_countings[0][0]
+    offset_bar_bpm = SEC_PER_MIN * BEATS_PER_BAR / offset_time
+
+    # prepare tick scales
+    dynamic_tempo_midi._tick_scales = []
+    tempo_changes = [(0, offset_bar_bpm)]
+
+    # add tick scales according to sixteenth times and countings
+    for i in range(len(clipped_sixteenth_times_and_countings) - 1):
+        sixteenth_start_time = clipped_sixteenth_times_and_countings[i][0]
+        sixteenth_end_time = clipped_sixteenth_times_and_countings[i+1][0]
+
+        start_tick = int(clipped_sixteenth_times_and_countings[i][1] * dynamic_tempo_midi.resolution) + offset_tick
+        bpm = SEC_PER_MIN / ((sixteenth_end_time - sixteenth_start_time) * SIXTEENTH_PER_BEAT)
+        tempo_changes.append((start_tick, bpm))
+
+    # add to midi and update tick to time
+    for tick, bpm in tempo_changes:
+        dynamic_tempo_midi._tick_scales.append((tick, SEC_PER_MIN / bpm / midi.resolution))
+    dynamic_tempo_midi._update_tick_to_time(0)
+
+    # add note to midi and quantize according to new scale
+    dynamic_tempo_midi.instruments[0].notes = []
+    for note in midi.instruments[0].notes:
+        note.start = dynamic_tempo_midi.tick_to_time(int(round(dynamic_tempo_midi.time_to_tick(note.start) / sixteenth_tick) * sixteenth_tick))
+        note.end = dynamic_tempo_midi.tick_to_time(int(round(dynamic_tempo_midi.time_to_tick(note.end) / sixteenth_tick) * sixteenth_tick))
+        dynamic_tempo_midi.instruments[0].notes.append(note)
+
+    return dynamic_tempo_midi
+
 def mix_audio(audio1, audio2, weight1=1.0, weight2=1.0):
 
     if audio1.ndim == 2:
@@ -958,6 +1003,7 @@ def main():
     if args.from_audio:
         melody_midi = \
             convert_quantized_time_to_real_time(midi=melody_midi, clipped_sixteenth_times_and_countings=clipped_sixteenth_times_and_countings)
+        melody_midi = compose_dynamic_tempo_midi(midi=melody_midi, clipped_sixteenth_times_and_countings=clipped_sixteenth_times_and_countings)
     melody_midi.write(filename=os.path.join(args.output_dir, MELODY_MIDI_OUTPUT_FILENAME))
 
 
