@@ -39,6 +39,7 @@ OUTPUT_SR = 44100
 MELODY_WEIGHT = 0.5
 MIN_GEN_SEED = 0
 MAX_GEN_SEED = 1e10
+INFER_BATCH_SIZE = 512
 AUDIO_FILENAME_EXTENSIONS = [".wav", ".mp3"]
 MIDI_FILENAME_EXTENSIONS = [".midi", ".mid"]
 JSON_FILENAME_EXTENSIONS = [".json"]
@@ -663,12 +664,12 @@ def F(file_name, conditional_tracks, content_tracks, condition_inst, chord_from_
     datum = torch.where(empty_pos, empty_index, datum)
     datum = torch.where(((datum != empty_index).float() * (1 - conditional_bool)).type(torch.bool), empty_index + 1, datum)
 
-    # datum = datum[:,:1280]
-    # conditional_bool = conditional_bool[:,:1280]
+    # datum = datum[:,:512]
+    # conditional_bool = conditional_bool[:,:512]
 
     # if trunc:
-    datum = datum[:,:512]
-    conditional_bool = conditional_bool[:,:512]
+    # datum = datum[:,:512]
+    # conditional_bool = conditional_bool[:,:512]
 
     not_empty_pos = (torch.tensor(np.array(datum)) != empty_index).float()
 
@@ -904,37 +905,6 @@ def main():
     solver.resume(path=args.load_path)
 
 
-    ## set seed
-    seed = args.gen_seed
-    seed_everything(seed, args.cudnn_deterministic)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-
-
-    # prepare conditonal midi
-    if args.from_audio:
-        if args.generate_from_calculated_chords:
-            conditional_midi = CustomPrettyMIDI(midi_file=args.conditional_chords_filepath)
-            clipped_sixteenth_times_and_countings = load_json(filepath=args.sixteenth_times_and_countings_filepath)
-        else:
-            conditional_midi, clipped_sixteenth_times_and_countings = \
-                make_midi_from_chroma(audio_file_path=args.bgm_filepath)
-
-        with open(os.path.join(args.output_dir, SIXTEENTH_TIMES_AND_COUNTINGS_OUTPUT_FILENAME), "w") as file:
-            json.dump(clipped_sixteenth_times_and_countings, file)
-        conditional_midi.write(filename=os.path.join(args.output_dir, CONDITONAL_CHORDS_OUTPUT_FILENAME))
-
-    else:
-        conditional_midi = CustomPrettyMIDI(midi_file=args.bgm_filepath)
-
-    conditional_midi = aggregate_tracks(conditional_midi)
-    conditional_midi.write(filename=TMP_MIDIFILE)
-    file_name = TMP_MIDIFILE
-
-
     # specify which track is conditional or content
     conditional_track = np.array([False, False, False, False, False, False, False])
     conditional_name = args.conditional_name
@@ -958,13 +928,35 @@ def main():
             assert False, 'No content tracks is selected. skip this song'
 
 
+    # prepare conditonal midi
+    if args.from_audio:
+        if args.generate_from_calculated_chords:
+            conditional_midi = CustomPrettyMIDI(midi_file=args.conditional_chords_filepath)
+            clipped_sixteenth_times_and_countings = load_json(filepath=args.sixteenth_times_and_countings_filepath)
+        else:
+            conditional_midi, clipped_sixteenth_times_and_countings = \
+                make_midi_from_chroma(audio_file_path=args.bgm_filepath)
+
+        with open(os.path.join(args.output_dir, SIXTEENTH_TIMES_AND_COUNTINGS_OUTPUT_FILENAME), "w") as file:
+            json.dump(clipped_sixteenth_times_and_countings, file)
+        conditional_midi.write(filename=os.path.join(args.output_dir, CONDITONAL_CHORDS_OUTPUT_FILENAME))
+
+    else:
+        conditional_midi = CustomPrettyMIDI(midi_file=args.bgm_filepath)
+
+    conditional_midi = aggregate_tracks(conditional_midi)
+    conditional_midi.write(filename=TMP_MIDIFILE)
+    file_name = TMP_MIDIFILE
+
+
     # generation
     x, tempo, not_empty_pos, condition_pos, pitch_shift, tpc, have_cond = F(file_name, conditional_track, content_track, condition_inst, args.chord_from_single)
 
     if not have_cond:
         assert False, "there exists the track that is specified as conditional inst but doesn't have any note in its track."
 
-    oct_line = solver.infer_sample(x, tempo, not_empty_pos, condition_pos, use_ema=args.no_ema)
+    oct_line = solver.infer_sample_batch(x, tempo, not_empty_pos, condition_pos, batch_size=INFER_BATCH_SIZE,
+                                   seed=args.gen_seed, cudnn_deterministic=args.cudnn_deterministic, use_ema=args.no_ema)
 
     data = oct_line.split(' ')
 
@@ -1005,7 +997,6 @@ def main():
             convert_quantized_time_to_real_time(midi=melody_midi, clipped_sixteenth_times_and_countings=clipped_sixteenth_times_and_countings)
         melody_midi = compose_dynamic_tempo_midi(midi=melody_midi, clipped_sixteenth_times_and_countings=clipped_sixteenth_times_and_countings)
     melody_midi.write(filename=os.path.join(args.output_dir, MELODY_MIDI_OUTPUT_FILENAME))
-
 
     # mix
     if args.output_synth_demo:

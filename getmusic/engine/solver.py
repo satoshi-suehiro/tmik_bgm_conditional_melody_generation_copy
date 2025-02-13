@@ -11,6 +11,9 @@ from getmusic.engine.ema import EMA
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import getmusic.utils.midi_config as mc
 
+from getmusic.utils.misc import seed_everything
+import numpy  as np
+
 try:
     from torch.cuda.amp import autocast, GradScaler
     AMP = True
@@ -518,8 +521,156 @@ class Solver(object):
             print('sampling, the song has {} time units'.format(samples.size()[-1]))
 
             datum = samples[0]
-            
-            
+
+            encoding = []
+            for t in range(samples.size()[-1]):
+                bar = t // self.pos_in_bar
+                pos = t % self.pos_in_bar
+                main_pitch = datum[0][t].item()
+                main_dur = datum[1][t].item()
+                assert (main_dur <= self.pad_index) and (main_pitch >= self.pad_index), 'pitch index is {} and dur index is {}'.format(main_pitch, main_dur)
+                if (main_pitch != self.pad_index) and (main_dur < self.pad_index):
+                    p = self.ids_to_tokens[main_pitch]
+                    if p[0] == 'M':
+                        p = p[1:]
+                        encoding.append((bar,pos,80,p,self.ids_to_tokens[main_dur][1:],28,ts,tempo))
+                    else:
+                        print('out m')
+
+                bass_pitch = datum[2][t].item()
+                bass_dur = datum[3][t].item()
+                assert bass_dur <= self.pad_index and bass_pitch >= self.pad_index, "{}, {}".format(bass_dur, bass_pitch)
+                if (bass_pitch != self.pad_index) and (bass_dur < self.pad_index):
+                    pitch = self.ids_to_tokens[bass_pitch]
+                    dur = self.ids_to_tokens[bass_dur]
+                    if pitch[0] == 'B':
+                        pitch = pitch[1:].split(' ')
+                        for p in pitch:
+                            encoding.append((bar,pos,32,p,dur[1:],24,ts,tempo))
+                    else:
+                        print('out b')
+                        
+                drums_pitch = datum[4][t].item() # 128
+                drums_dur = datum[5][t].item()
+                assert drums_dur <= self.pad_index and drums_pitch >= self.pad_index, "{}, {}".format(drums_dur, drums_pitch)
+                if (drums_pitch != self.pad_index) and (drums_dur < self.pad_index):
+                    pitch = self.ids_to_tokens[drums_pitch]
+                    dur = self.ids_to_tokens[drums_dur]
+                    if pitch[0] == 'D':
+                        pitch = pitch[1:].split(' ')
+                        for p in pitch:
+                            encoding.append((bar,pos,128,p,dur[1:],24,ts,tempo))
+                    else:
+                        print('out d')
+                        
+                guitar_pitch = datum[6][t].item() # 25
+                guitar_dur = datum[7][t].item()
+                assert guitar_dur <= self.pad_index and guitar_pitch >= self.pad_index, "{}, {}".format(guitar_dur, guitar_pitch)
+                if (guitar_pitch != self.pad_index) and (guitar_dur < self.pad_index):
+                    pitch = self.ids_to_tokens[guitar_pitch]
+                    dur = self.ids_to_tokens[guitar_dur]
+                    if pitch[0] == 'G':
+                        pitch = pitch[1:].split(' ')
+                        for p in pitch:
+                            encoding.append((bar,pos,25,p,dur[1:],20,ts,tempo))
+                    else:
+                        print('out g')
+                            
+                piano_pitch = datum[8][t].item()
+                piano_dur = datum[9][t].item()
+                assert piano_dur <= self.pad_index and piano_pitch >= self.pad_index, "{}, {}".format(piano_dur, piano_pitch)
+                if (piano_pitch != self.pad_index) and (piano_dur < self.pad_index):
+                    pitch = self.ids_to_tokens[piano_pitch]
+                    dur = self.ids_to_tokens[piano_dur]
+                    if pitch[0] == 'P':
+                        pitch = pitch[1:].split(' ')
+                        for p in pitch:
+                            encoding.append((bar,pos,0,p,dur[1:],24,ts,tempo))
+                    else:
+                        print('out p')
+                            
+                string_pitch = datum[10][t].item() # 48
+                string_dur = datum[11][t].item()
+                assert string_dur <= self.pad_index and string_pitch >= self.pad_index, 'p:{},d:{}'.format(string_pitch,string_dur)
+                if (string_pitch != self.pad_index) and (string_dur < self.pad_index):
+                    pitch = self.ids_to_tokens[string_pitch]
+                    dur = self.ids_to_tokens[string_dur]
+                    if pitch[0] == 'S':
+                        pitch = pitch[1:].split(' ')
+                        for p in pitch:
+                            encoding.append((bar,pos,48,p,dur[1:],12,ts,tempo))
+                    else:
+                        print('out s')
+                        
+                # just for chord debug
+                root_id = datum[12][t].item()
+                kind_id = datum[13][t].item()
+                if self.ids_to_tokens[root_id] in root_dict and self.ids_to_tokens[kind_id] in kind_dict:
+                    root = root_dict[self.ids_to_tokens[root_id]]
+                    kind = kind_dict[self.ids_to_tokens[kind_id]]
+                    encoding.append((bar,pos,129,root,kind,1,ts,tempo))
+                   
+        encoding.sort()
+        oct_line = ['<0-{}> <1-{}> <2-{}> <3-{}> <4-{}> <5-{}> <6-{}> <7-{}>'.format(e[0],e[1],e[2],e[3],e[4],e[5],e[6],e[7]) for e in encoding]
+        
+        if use_ema and self.ema is not None:
+            self.ema.modify_to_train()
+
+        return ' '.join(oct_line)
+
+
+
+    def infer_sample_batch(self, x, tempo, not_empty_pos, condition_pos, batch_size, seed, cudnn_deterministic, use_ema=True, skip_step=0):
+        self.model.eval()
+        tic = time.time()
+        
+        if use_ema and self.ema is not None:
+            print('use ema parameters')
+            self.ema.modify_to_inference()
+
+        if isinstance(self.model, torch.nn.parallel.DistributedDataParallel):
+            model = self.model.module
+        else:  
+            model = self.model 
+
+        with torch.no_grad(): 
+            x = x.cuda()
+            tempo = tempo.cuda()
+            not_empty_pos = not_empty_pos.cuda()
+            condition_pos = condition_pos.cuda()
+            assert x.size()[0] == 1
+            ts = 6
+
+            # samples = model.infer_sample(x, tempo, not_empty_pos, condition_pos, skip_step=skip_step)
+
+            samples_batches = []
+
+            for i in range(math.ceil(x.shape[-1] / batch_size)):
+
+                ## set seed
+                seed_everything(seed, cudnn_deterministic)
+                os.environ['PYTHONHASHSEED'] = str(seed)
+                np.random.seed(seed)
+                torch.manual_seed(seed)
+                torch.cuda.manual_seed(seed)
+                torch.cuda.manual_seed_all(seed)
+
+                # batch generation
+                start_idx = i * batch_size
+                end_idx = (i+1) * batch_size
+                x_batch = x[:, :, start_idx:end_idx].detach().clone()
+                not_empty_pos_batch = not_empty_pos[:, start_idx:end_idx].detach().clone()
+                condition_pos_batch = condition_pos[:, start_idx:end_idx].detach().clone()
+
+                samples_batch = model.infer_sample(x_batch, tempo, not_empty_pos_batch, condition_pos_batch, skip_step=skip_step)
+                samples_batches.append(samples_batch)
+
+            samples = torch.cat(samples_batches, dim=-1)
+
+            print('sampling, the song has {} time units'.format(samples.size()[-1]))
+
+            datum = samples[0]
+
             encoding = []
             for t in range(samples.size()[-1]):
                 bar = t // self.pos_in_bar

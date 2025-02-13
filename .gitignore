@@ -20,6 +20,7 @@ testdata/test11.wav
 testdata/test_changetempo.mid
 testdata/conditional_chords.mid
 testdata/sixteenth_times_and_countings.json
+testdata/test_repeat.wav
 
 testoutput
 
@@ -27,6 +28,8 @@ docker_setup.md
 dockerfile_orig.txt
 
 hello.py
+
+melody_generation_old.py
 
 melody.mid
 
