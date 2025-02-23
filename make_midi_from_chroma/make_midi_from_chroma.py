@@ -1,9 +1,11 @@
 import os
 import sys
+import copy
 import math
 import bisect
 
 import pretty_midi
+import madmom
 
 from tqdm import tqdm
 import numpy as np
@@ -53,7 +55,8 @@ def make_bar_times(beat_times_and_countings):
 def make_sixteenth_times_and_countings(
         beat_times_and_countings: np.ndarray,
         quantization_unit: int = 16,
-        beats_per_bar: int = 4
+        beats_per_bar: int = 4,
+        return_beat_times_and_countings: bool = False
     ):
 
     assert quantization_unit in [16, 8, 4]
@@ -74,6 +77,9 @@ def make_sixteenth_times_and_countings(
             counting_offset += beats_per_bar
 
         beat_times_and_countings[i][1] = counting_offset + counting
+
+    if return_beat_times_and_countings:
+        saved_beat_times_and_countings = copy.deepcopy(beat_times_and_countings)
 
     # add semi note to beat_times_and_countings
     for i in range(0, len(beat_times_and_countings) - 1):
@@ -97,7 +103,10 @@ def make_sixteenth_times_and_countings(
             ])
     beat_times_and_countings = sorted(beat_times_and_countings, key=lambda x: x[1])
 
-    return beat_times_and_countings
+    if return_beat_times_and_countings:
+        return saved_beat_times_and_countings, beat_times_and_countings
+    else:
+        return beat_times_and_countings
 
 
 def sequence_note_pitch_vectors(integrated_chroma):
@@ -321,7 +330,6 @@ def make_data(
     return integrated_midi
 
 
-
 def make_midi_from_chroma(audio_file_path):
 
     beat_times_and_countings = downbeat_estimation(wavfile_path=audio_file_path, beats_per_bar_candidates=config.beats_per_bar_candidates)
@@ -358,3 +366,89 @@ def make_midi_from_chroma(audio_file_path):
     )
 
     return data, clipped_sixteenth_times_and_countings
+
+
+def infer_chords_by_madmom(audio_file_path, feature_extractor, decoder):
+    dcp = eval(f"{feature_extractor}()")
+    decode = eval(f"{decoder}()")
+
+    chroma = dcp(audio_file_path)
+    chord_recognition_res = decode(chroma)
+
+    return chord_recognition_res
+
+
+def make_data_by_madmom_chord_recognition(
+    chord_recognition_res,
+    beat_times_and_countings,
+    avg_bpm
+):
+    midi = pretty_midi.PrettyMIDI(initial_tempo=avg_bpm)
+    chords_track = pretty_midi.Instrument(program=0, is_drum=False, name="chords")
+
+    for item in chord_recognition_res:
+        start_time, end_time, chord = item
+
+        if chord==config.madmom_nonechord:
+            pass
+
+        else:
+            r, k = chord.split(config.madmom_chordsplitstr)
+            root_note_num = config.madmom_pc2nn[r]
+            pitches = [root_note_num + pitch_offset for pitch_offset in config.madmom_chordkindpitches[k]]
+
+            for pitch in pitches:
+                note = pretty_midi.Note(
+                    velocity=config.data_fixed_velocity,
+                    pitch=pitch,
+                    start=start_time,
+                    end=end_time
+                )
+                chords_track.notes.append(note)
+
+        midi.instruments = [chords_track]
+
+    midi = quantize_in_temporally_changing_bpm_song(
+        midi=midi,
+        targets = "all",
+        sixteenth_times_and_countings = beat_times_and_countings,
+        quantization_unit = config.quantization_unit,
+        beats_per_bar = config.beats_per_bar_candidates[0]
+    )
+    midi = extend_zero_length_notes(midi=midi, targets="all", minimum_length=config.minimum_length)
+    midi.remove_invalid_notes()
+
+    return midi
+
+
+def make_midi_by_madmom_chord_recognition(
+    audio_file_path,
+    feature_extractor = "madmom.audio.chroma.DeepChromaProcessor",
+    decoder = "madmom.features.chords.DeepChromaChordRecognitionProcessor"
+):
+
+    beat_times_and_countings = downbeat_estimation(wavfile_path=audio_file_path, beats_per_bar_candidates=config.beats_per_bar_candidates)
+
+    clipped_beat_times_and_countings = clip_beat_times_and_countings(beat_times_and_countings=beat_times_and_countings)
+    bar_times = make_bar_times(beat_times_and_countings=clipped_beat_times_and_countings)
+
+    if len(bar_times) <= 1:
+        raise NotEnoughLengthError
+
+    clipped_beat_times_and_countings, clipped_sixteenth_times_and_countings = \
+        make_sixteenth_times_and_countings(beat_times_and_countings=clipped_beat_times_and_countings, return_beat_times_and_countings=True)
+
+    chord_recognition_res = infer_chords_by_madmom(
+        audio_file_path=audio_file_path,
+        feature_extractor=feature_extractor,
+        decoder=decoder
+    )
+
+    data = make_data_by_madmom_chord_recognition(
+        chord_recognition_res=chord_recognition_res,
+        beat_times_and_countings=clipped_beat_times_and_countings,
+        avg_bpm=calc_avg_bpm(beat_times_and_countings=beat_times_and_countings)
+    )
+
+    return data, clipped_sixteenth_times_and_countings
+

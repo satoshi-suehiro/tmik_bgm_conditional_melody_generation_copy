@@ -32,3 +32,26 @@ chord_change_prob=0.5
 chord_pitch_out_of_key_prob=0.01
 chord_note_concentration=100.0
 
+
+madmom_pc2nn = {
+    'A': 57,
+    'A#': 58,
+    'B': 59,
+    'C': 48,
+    'C#': 49,
+    'D': 50,
+    'D#': 51,
+    'E': 52,
+    'F': 53,
+    'F#': 54,
+    'G': 55,
+    'G#': 56
+}
+
+madmom_nonechord = "N"
+madmom_chordkindpitches = {
+    'maj': [0, 4, 7],
+    'min': [0, 3, 7]
+}
+madmom_chordsplitstr = ":"
+

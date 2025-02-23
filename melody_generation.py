@@ -31,7 +31,7 @@ from utils.information import Information, Informations
 from utils.midi_processing import CustomPrettyMIDI
 from utils.wav_processing import Wav
 
-from make_midi_from_chroma.make_midi_from_chroma import make_midi_from_chroma
+from make_midi_from_chroma.make_midi_from_chroma import make_midi_from_chroma, make_midi_by_madmom_chord_recognition
 
 
 TMP_MIDIFILE = "./tmp.mid"
@@ -197,6 +197,9 @@ def get_args():
                         help='seed for generation. int. (example) 0')
 
     parser.add_argument('--output_synth_demo', action="store_true", default=False)
+
+    parser.add_argument('--one_shot_generation', action="store_true", default=False)
+    parser.add_argument('--use_chroma_viterbi', action="store_true", default=False)
 
     parser.add_argument('--generate_from_calculated_chords', action="store_true", default=False)
     parser.add_argument('--sixteenth_times_and_countings_filepath', type=str, default=None)
@@ -934,8 +937,12 @@ def main():
             conditional_midi = CustomPrettyMIDI(midi_file=args.conditional_chords_filepath)
             clipped_sixteenth_times_and_countings = load_json(filepath=args.sixteenth_times_and_countings_filepath)
         else:
-            conditional_midi, clipped_sixteenth_times_and_countings = \
-                make_midi_from_chroma(audio_file_path=args.bgm_filepath)
+            if args.use_chroma_viterbi:
+                conditional_midi, clipped_sixteenth_times_and_countings = \
+                    make_midi_from_chroma(audio_file_path=args.bgm_filepath)
+            else:
+                conditional_midi, clipped_sixteenth_times_and_countings = \
+                    make_midi_by_madmom_chord_recognition(audio_file_path=args.bgm_filepath)
 
         with open(os.path.join(args.output_dir, SIXTEENTH_TIMES_AND_COUNTINGS_OUTPUT_FILENAME), "w") as file:
             json.dump(clipped_sixteenth_times_and_countings, file)
@@ -955,8 +962,12 @@ def main():
     if not have_cond:
         assert False, "there exists the track that is specified as conditional inst but doesn't have any note in its track."
 
-    oct_line = solver.infer_sample_batch(x, tempo, not_empty_pos, condition_pos, batch_size=INFER_BATCH_SIZE,
-                                   seed=args.gen_seed, cudnn_deterministic=args.cudnn_deterministic, use_ema=args.no_ema)
+    if args.one_shot_generation:
+        oct_line = solver.infer_sample(x, tempo, not_empty_pos, condition_pos,
+                                       seed=args.gen_seed, cudnn_deterministic=args.cudnn_deterministic, use_ema=args.no_ema)
+    else:
+        oct_line = solver.infer_sample_batch(x, tempo, not_empty_pos, condition_pos, batch_size=INFER_BATCH_SIZE,
+                                    seed=args.gen_seed, cudnn_deterministic=args.cudnn_deterministic, use_ema=args.no_ema)
 
     data = oct_line.split(' ')
 

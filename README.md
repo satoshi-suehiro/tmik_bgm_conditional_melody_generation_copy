@@ -36,6 +36,12 @@ uv run melody_generation.py --load_path ./checkpoints/checkpoint.pth --bgm_filep
 <br>
 --output_synth_demo:  
 &emsp;シンセによるデモを出力するか否かを指定  
+<br>
+--one_shot_generation:  
+&emsp;このフラグを追加すると、batchごと分割して生成するのではなく曲全体を一気に生成する  
+<br>
+--use_chroma_viterbi:  
+&emsp;このフラグを追加すると、オーディオデータに対するコード推定にクロマベクトルを用いたビタビアルゴリズムを用いる(指定しないとCRFによるコード推定)  
 
 <br>
 
@@ -64,12 +70,19 @@ conditional_chords.mid:
 CPU: Intel(R) Core(TM) i5-14600K 3.50 GHz  
 GPU: GeForce RTX 4070 SUPER
 
-1:40(約32小節)の楽曲の場合  
-&emsp;モデル読み込み: 27.311174 秒  
-&emsp;クロマベクトル+コード推定(wavのみ発生): 18.545374 秒  
-&emsp;GETMusicメロディ生成: 21.191022 秒  
-&emsp;シンセデモ作成: 1.550952 秒  
-&emsp;*計: 68.598522 秒*  
+3:28(約64小節)の楽曲の場合  
+&emsp;モデル読み込み: 51.24 秒  
+<br>
+&emsp;コード推定(wavのみ発生)  
+&emsp;&emsp;chroma+CRF: 19.74 秒  
+&emsp;&emsp;chroma+viterbi: 28.27 秒  
+<br>
+&emsp;GETMusicメロディ生成  
+&emsp;&emsp;バッチ生成: 38.42 秒  
+&emsp;&emsp;一括生成: 54.99 秒  
+<br>
+&emsp;シンセデモ作成: 8.93 秒  
+
 <br>
 
 ## 時間短縮の工夫

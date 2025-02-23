@@ -495,7 +495,8 @@ class Solver(object):
         for epoch in range(start_epoch, self.max_epochs):
             self.train_epoch()
             
-    def infer_sample(self, x, tempo, not_empty_pos, condition_pos, use_ema=True, skip_step=0):
+    # def infer_sample(self, x, tempo, not_empty_pos, condition_pos, use_ema=True, skip_step=0):
+    def infer_sample(self, x, tempo, not_empty_pos, condition_pos, seed, cudnn_deterministic, use_ema=True, skip_step=0):
         self.model.eval()
         tic = time.time()
         
@@ -507,6 +508,14 @@ class Solver(object):
             model = self.model.module
         else:  
             model = self.model 
+
+        ## set seed
+        seed_everything(seed, cudnn_deterministic)
+        os.environ['PYTHONHASHSEED'] = str(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
 
         with torch.no_grad(): 
             x = x.cuda()
