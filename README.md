@@ -103,5 +103,14 @@ uv run melody_generation.py --load_path ./checkpoints/checkpoint.pth --gen_seed 
 <br>
 
 
+## 複数メロディの同時生成
+バッチ生成を利用して、同一のバックミュージックに対して複数のメロディを生成することが可能。
+```
+uv run multi_melody_generation.py --load_path ./checkpoints/checkpoint.pth --bgm_filepath ./testdata/test.wav --gen_seed 0 --output_synth_demo --gen_melody_num 2
+```
+--gen_melody_num:  
+&emsp;いくつのメロディを同時生成するかを指定。大きい数を指定しすぎるとVRAMが足りず非常に長い時間が掛かることがあるので適宜調整すること。デフォルトではresultsディレクトリ下に0, 1, 2, ...というディレクトリが作成され、そこに各メロディとmixが保存される。  
+<br>
+
 # TODO
 * 現在冒頭の32小節分しかメロディが生成されない仕様となっている。バッチ生成の仕組みを導入して32小節以上のメロディ生成にも対応する。

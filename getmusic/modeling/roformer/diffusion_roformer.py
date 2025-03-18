@@ -499,7 +499,7 @@ class DiffusionRFM(nn.Module):
             **kwargs):
 
         batch_size = x.size()[0]
-        assert batch_size == 1
+        # assert batch_size == 1
           
         num_to_be_generated_per_track = (x == self.num_classes - 1).sum(-1)[0]
         num_to_be_generated_per_track = num_to_be_generated_per_track[0::2] + num_to_be_generated_per_track[1::2]
