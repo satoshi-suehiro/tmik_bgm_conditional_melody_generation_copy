@@ -38,8 +38,8 @@ TMP_MIDIFILE = "./tmp.mid"
 OUTPUT_SR = 44100
 MELODY_WEIGHT = 0.5
 MIN_GEN_SEED = 0
-MAX_GEN_SEED = 1e10
-INFER_BATCH_SIZE = 512
+MAX_GEN_SEED = 2**32 - 1
+INFER_SPLIT_SIZE = 512
 AUDIO_FILENAME_EXTENSIONS = [".wav", ".mp3"]
 MIDI_FILENAME_EXTENSIONS = [".midi", ".mid"]
 JSON_FILENAME_EXTENSIONS = [".json"]
@@ -237,6 +237,8 @@ def get_args():
 
     if args.gen_seed is None:
         args.gen_seed = random.randint(MIN_GEN_SEED, MAX_GEN_SEED)
+    else:
+        assert MIN_GEN_SEED <= args.gen_seed <= MAX_GEN_SEED
 
     if not os.path.exists(args.bgm_filepath):
         assert False, "The specified bgm filepath does not exist."
@@ -966,7 +968,7 @@ def main():
         oct_line = solver.infer_sample(x, tempo, not_empty_pos, condition_pos,
                                        seed=args.gen_seed, cudnn_deterministic=args.cudnn_deterministic, use_ema=args.no_ema)
     else:
-        oct_line = solver.infer_sample_batch(x, tempo, not_empty_pos, condition_pos, batch_size=INFER_BATCH_SIZE,
+        oct_line = solver.infer_sample_by_split(x, tempo, not_empty_pos, condition_pos, split_size=INFER_SPLIT_SIZE,
                                     seed=args.gen_seed, cudnn_deterministic=args.cudnn_deterministic, use_ema=args.no_ema)
 
     data = oct_line.split(' ')

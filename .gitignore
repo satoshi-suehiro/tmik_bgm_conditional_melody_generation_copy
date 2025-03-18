@@ -5,6 +5,9 @@ __pycache__
 cache
 
 checkpoints/checkpoint.pth
+checkpoints/train_test.pth
+
+configs
 
 getmusic/__pycache__
 getmusic/data/__pycache__
@@ -13,8 +16,11 @@ getmusic/engine/__pycache__
 getmusic/modeling/__pycache__
 getmusic/utils/__pycache__
 
+OUTPUT
+
 results
 
+testdata
 testdata/test_short.wav
 testdata/test11.wav
 testdata/test_changetempo.mid

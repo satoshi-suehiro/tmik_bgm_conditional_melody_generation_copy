@@ -32,13 +32,13 @@ uv run melody_generation.py --load_path ./checkpoints/checkpoint.pth --bgm_filep
 &emsp;生成条件となるバックミュージックへのパス。[.wav, .mp3, .mid, .midi]に対応  
 <br>
 --gen_seed:  
-&emsp;seedを指定する場合に使用。指定しなければ1~1e10の範囲のランダムなseedが選ばれる  
+&emsp;seedを指定する場合に使用。指定しなければ1~2**32-1の範囲のランダムなseedが選ばれる  
 <br>
 --output_synth_demo:  
 &emsp;シンセによるデモを出力するか否かを指定  
 <br>
 --one_shot_generation:  
-&emsp;このフラグを追加すると、batchごと分割して生成するのではなく曲全体を一気に生成する  
+&emsp;このフラグを追加すると、splitごとに分割して生成するのではなく曲全体を一気に生成する  
 <br>
 --use_chroma_viterbi:  
 &emsp;このフラグを追加すると、オーディオデータに対するコード推定にクロマベクトルを用いたビタビアルゴリズムを用いる(指定しないとCRFによるコード推定)  

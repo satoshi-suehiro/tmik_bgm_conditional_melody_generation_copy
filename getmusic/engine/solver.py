@@ -629,7 +629,7 @@ class Solver(object):
 
 
 
-    def infer_sample_batch(self, x, tempo, not_empty_pos, condition_pos, batch_size, seed, cudnn_deterministic, use_ema=True, skip_step=0):
+    def infer_sample_by_split(self, x, tempo, not_empty_pos, condition_pos, split_size, seed, cudnn_deterministic, use_ema=True, skip_step=0):
         self.model.eval()
         tic = time.time()
         
@@ -652,9 +652,9 @@ class Solver(object):
 
             # samples = model.infer_sample(x, tempo, not_empty_pos, condition_pos, skip_step=skip_step)
 
-            samples_batches = []
+            samples_splits = []
 
-            for i in range(math.ceil(x.shape[-1] / batch_size)):
+            for i in range(math.ceil(x.shape[-1] / split_size)):
 
                 ## set seed
                 seed_everything(seed, cudnn_deterministic)
@@ -664,17 +664,17 @@ class Solver(object):
                 torch.cuda.manual_seed(seed)
                 torch.cuda.manual_seed_all(seed)
 
-                # batch generation
-                start_idx = i * batch_size
-                end_idx = (i+1) * batch_size
-                x_batch = x[:, :, start_idx:end_idx].detach().clone()
-                not_empty_pos_batch = not_empty_pos[:, start_idx:end_idx].detach().clone()
-                condition_pos_batch = condition_pos[:, start_idx:end_idx].detach().clone()
+                # split generation
+                start_idx = i * split_size
+                end_idx = (i+1) * split_size
+                x_split = x[:, :, start_idx:end_idx].detach().clone()
+                not_empty_pos_split = not_empty_pos[:, start_idx:end_idx].detach().clone()
+                condition_pos_split = condition_pos[:, start_idx:end_idx].detach().clone()
 
-                samples_batch = model.infer_sample(x_batch, tempo, not_empty_pos_batch, condition_pos_batch, skip_step=skip_step)
-                samples_batches.append(samples_batch)
+                samples_split = model.infer_sample(x_split, tempo, not_empty_pos_split, condition_pos_split, skip_step=skip_step)
+                samples_splits.append(samples_split)
 
-            samples = torch.cat(samples_batches, dim=-1)
+            samples = torch.cat(samples_splits, dim=-1)
 
             print('sampling, the song has {} time units'.format(samples.size()[-1]))
 
