@@ -205,6 +205,9 @@ def get_args():
     parser.add_argument('--sixteenth_times_and_countings_filepath', type=str, default=None)
     parser.add_argument('--conditional_chords_filepath', type=str, default=None)
 
+    parser.add_argument('--bpm', type=int, default=None)
+    parser.add_argument('--start_time', type=float, default=None)
+
     parser.add_argument('--load_path', type=str, default=None,
                     help='path to model that need to be loaded, '
                             'used for loading pretrained model')
@@ -267,6 +270,13 @@ def get_args():
         else:
             assert False, f"Unsupported file extension: {file_extension}. " + \
                     f"Supported extensions are: {', '.join(AUDIO_FILENAME_EXTENSIONS + MIDI_FILENAME_EXTENSIONS)}"
+
+    if (args.bpm is not None and args.start_time is None) or (args.start_time is not None and args.bpm is None):
+        assert False, "If either --bpm or --start_time is specified, the other must also be specified."
+    elif args.bpm is not None and args.start_time is not None:
+        args.use_handinputed_bpm = True
+    else:
+        args.use_handinputed_bpm = False
 
     return args
 
@@ -941,10 +951,10 @@ def main():
         else:
             if args.use_chroma_viterbi:
                 conditional_midi, clipped_sixteenth_times_and_countings = \
-                    make_midi_from_chroma(audio_file_path=args.bgm_filepath)
+                    make_midi_from_chroma(audio_file_path=args.bgm_filepath, use_handinputed_bpm=args.use_handinputed_bpm, start_time=args.start_time, bpm=args.bpm)
             else:
                 conditional_midi, clipped_sixteenth_times_and_countings = \
-                    make_midi_by_madmom_chord_recognition(audio_file_path=args.bgm_filepath)
+                    make_midi_by_madmom_chord_recognition(audio_file_path=args.bgm_filepath, use_handinputed_bpm=args.use_handinputed_bpm, start_time=args.start_time, bpm=args.bpm)
 
         with open(os.path.join(args.output_dir, SIXTEENTH_TIMES_AND_COUNTINGS_OUTPUT_FILENAME), "w") as file:
             json.dump(clipped_sixteenth_times_and_countings, file)

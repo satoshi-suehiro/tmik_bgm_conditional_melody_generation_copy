@@ -10,7 +10,7 @@ import madmom
 from tqdm import tqdm
 import numpy as np
 
-from make_midi_from_chroma.data_preprocess import downbeat_estimation, make_integrated_chroma
+from make_midi_from_chroma.data_preprocess import make_downbeat_array_by_handinputed_bpm, downbeat_estimation, make_integrated_chroma
 
 from make_midi_from_chroma.magenta_chord_recognition import _key_chord_distribution, _key_chord_transition_distribution, _chord_frame_log_likelihood, _key_chord_viterbi, \
                                     NO_CHORD, _PITCH_CLASS_NAMES, _CHORD_KIND_PITCHES
@@ -330,9 +330,12 @@ def make_data(
     return integrated_midi
 
 
-def make_midi_from_chroma(audio_file_path):
+def make_midi_from_chroma(audio_file_path, use_handinputed_bpm=False, start_time=None, bpm=None):
 
-    beat_times_and_countings = downbeat_estimation(wavfile_path=audio_file_path, beats_per_bar_candidates=config.beats_per_bar_candidates)
+    if use_handinputed_bpm:
+        beat_times_and_countings = make_downbeat_array_by_handinputed_bpm(audio_filepath=audio_file_path, start_time=start_time, bpm=bpm)
+    else:
+        beat_times_and_countings = downbeat_estimation(wavfile_path=audio_file_path, beats_per_bar_candidates=config.beats_per_bar_candidates)
 
     clipped_beat_times_and_countings = clip_beat_times_and_countings(beat_times_and_countings=beat_times_and_countings)
     bar_times = make_bar_times(beat_times_and_countings=clipped_beat_times_and_countings)
@@ -423,11 +426,17 @@ def make_data_by_madmom_chord_recognition(
 
 def make_midi_by_madmom_chord_recognition(
     audio_file_path,
+    use_handinputed_bpm=False,
+    start_time=None,
+    bpm=None,
     feature_extractor = "madmom.audio.chroma.DeepChromaProcessor",
     decoder = "madmom.features.chords.DeepChromaChordRecognitionProcessor"
 ):
 
-    beat_times_and_countings = downbeat_estimation(wavfile_path=audio_file_path, beats_per_bar_candidates=config.beats_per_bar_candidates)
+    if use_handinputed_bpm:
+        beat_times_and_countings = make_downbeat_array_by_handinputed_bpm(audio_filepath=audio_file_path, start_time=start_time, bpm=bpm)
+    else:
+        beat_times_and_countings = downbeat_estimation(wavfile_path=audio_file_path, beats_per_bar_candidates=config.beats_per_bar_candidates)
 
     clipped_beat_times_and_countings = clip_beat_times_and_countings(beat_times_and_countings=beat_times_and_countings)
     bar_times = make_bar_times(beat_times_and_countings=clipped_beat_times_and_countings)

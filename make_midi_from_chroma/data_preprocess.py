@@ -12,6 +12,18 @@ import numpy as np
 
 
 
+def make_downbeat_array_by_handinputed_bpm(audio_filepath, start_time, bpm):
+    if start_time == 0:
+        start_time = 1e-10
+
+    duration = librosa.get_duration(path=audio_filepath)
+    time_per_beat = 60.0 / bpm
+    beat_times_and_countings = [[start_time + i * time_per_beat, float(1 + i % 4)] for i in range(int(duration // time_per_beat))]
+    beat_times_and_countings = np.array(beat_times_and_countings)
+
+    return beat_times_and_countings
+
+
 def downbeat_estimation(wavfile_path, beats_per_bar_candidates=[3, 4], fps=100):
 
     # downbeat estimation by madmom

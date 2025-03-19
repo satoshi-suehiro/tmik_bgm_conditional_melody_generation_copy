@@ -20,6 +20,8 @@ OUTPUT
 
 results
 
+savedata
+
 testdata
 testdata/test_short.wav
 testdata/test11.wav
@@ -41,3 +43,4 @@ melody.mid
 
 raw_midi.mid
 tmp.mid
+tmp.wav

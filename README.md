@@ -42,6 +42,12 @@ uv run melody_generation.py --load_path ./checkpoints/checkpoint.pth --bgm_filep
 <br>
 --use_chroma_viterbi:  
 &emsp;このフラグを追加すると、オーディオデータに対するコード推定にクロマベクトルを用いたビタビアルゴリズムを用いる(指定しないとCRFによるコード推定)  
+<br>
+--start_time:  
+&emsp;指定したBPMと開始時間で生成を行うときに指定する。1拍目が始まる時間(s)。これを指定する場合、--bpmも指定しなければならない  
+<br>
+--bpm:  
+&emsp;指定したBPMと開始時間で生成を行うときに指定する。BPM。これを指定する場合、--start_timeも指定しなければならない  
 
 <br>
 
