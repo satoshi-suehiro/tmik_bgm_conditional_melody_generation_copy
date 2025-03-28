@@ -48,6 +48,9 @@ uv run melody_generation.py --load_path ./checkpoints/checkpoint.pth --bgm_filep
 <br>
 --bpm:  
 &emsp;指定したBPMと開始時間で生成を行うときに指定する。BPM。これを指定する場合、--start_timeも指定しなければならない  
+<br>
+--output_beat_estimation_mix:  
+&emsp;ビート推定結果をミックスしたオーディオを出力するか否かを指定(デバッグ用)  
 
 <br>
 
@@ -69,6 +72,15 @@ sixteenth_times_and_countings.json:
 <br>
 conditional_chords.mid:  
 &emsp;入力がAudioファイル(.wav, .mp3)の場合のみ生成される。バックミュージックのコード推定結果を示したもの。既に生成したことのあるバックミュージックに対してメロディを生成する際に指定すると時間短縮になる。[詳細](#時間短縮の工夫)  
+<br>
+beat_mixed_backmusic.wav:  
+&emsp;--output_beat_estimation_mixを指定し、かつ入力がAudioファイル(.wav, .mp3)の場合のみ生成される。バックミュージックにビート推定結果をミックスしたもの。  
+<br>
+beat_mixed_synth_melody.wav:  
+&emsp;--output_beat_estimation_mixと--output_synth_demoを指定し、かつ入力がAudioファイル(.wav, .mp3)の場合のみ生成される。シンセによるメロディ(melody.wav)にビート推定結果をミックスしたもの。  
+<br>
+beat_mixed_synth_mix.wav:  
+&emsp;--output_beat_estimation_mixと--output_synth_demoを指定し、かつ入力がAudioファイル(.wav, .mp3)の場合のみ生成される。シンセメロディによるデモ(mix.wav)にビート推定結果をミックスしたもの。  
 <br>
 
 

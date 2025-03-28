@@ -31,6 +31,8 @@ from utils.information import Information, Informations
 from utils.midi_processing import CustomPrettyMIDI
 from utils.wav_processing import Wav
 
+from debug.utils import make_clicked_audio
+
 from make_midi_from_chroma.make_midi_from_chroma import make_midi_from_chroma, make_midi_by_madmom_chord_recognition
 
 
@@ -49,6 +51,9 @@ CONDITONAL_CHORDS_OUTPUT_FILENAME = "conditional_chords.mid"
 MELODY_MIDI_OUTPUT_FILENAME = "melody.mid"
 MELODY_AUDIO_OUTPUT_FILENAME = "melody.wav"
 MIXED_AUDIO_OUTPUT_FILENAME = "mix.wav"
+BEAT_MIXED_BACKMUSIC_OUTPUT_FILENAME = "beat_mixed_backmusic.wav"
+BEAT_MIXED_SYNTH_MELODY_OUTPUT_FILENAME = "beat_mixed_synth_melody.wav"
+BEAT_MIXED_SYNTH_MIX_OUTPUT_FILENAME = "beat_mixed_synth_mix.wav"
 
 NODE_RANK = os.environ['INDEX'] if 'INDEX' in os.environ else 0
 NODE_RANK = int(NODE_RANK)
@@ -197,6 +202,7 @@ def get_args():
                         help='seed for generation. int. (example) 0')
 
     parser.add_argument('--output_synth_demo', action="store_true", default=False)
+    parser.add_argument('--output_beat_estimation_mix', action="store_true", default=False)
 
     parser.add_argument('--one_shot_generation', action="store_true", default=False)
     parser.add_argument('--use_chroma_viterbi', action="store_true", default=False)
@@ -960,6 +966,10 @@ def main():
             json.dump(clipped_sixteenth_times_and_countings, file)
         conditional_midi.write(filename=os.path.join(args.output_dir, CONDITONAL_CHORDS_OUTPUT_FILENAME))
 
+        if args.output_beat_estimation_mix:
+            times = [sixteenth_time_and_counting[0] for i, sixteenth_time_and_counting in enumerate(clipped_sixteenth_times_and_countings) if i%4==0]
+            make_clicked_audio(audio_filepath=args.bgm_filepath, times=times, output_path=os.path.join(args.output_dir, BEAT_MIXED_BACKMUSIC_OUTPUT_FILENAME))
+
     else:
         conditional_midi = CustomPrettyMIDI(midi_file=args.bgm_filepath)
 
@@ -1035,6 +1045,9 @@ def main():
         sf.write(os.path.join(args.output_dir, MELODY_AUDIO_OUTPUT_FILENAME), melody_audio, OUTPUT_SR)
         sf.write(os.path.join(args.output_dir, MIXED_AUDIO_OUTPUT_FILENAME), mixed_audio, OUTPUT_SR)
 
+        if args.output_beat_estimation_mix:
+            make_clicked_audio(audio_filepath=os.path.join(args.output_dir, MELODY_AUDIO_OUTPUT_FILENAME), times=times, output_path=os.path.join(args.output_dir, BEAT_MIXED_SYNTH_MELODY_OUTPUT_FILENAME))
+            make_clicked_audio(audio_filepath=os.path.join(args.output_dir, MIXED_AUDIO_OUTPUT_FILENAME), times=times, output_path=os.path.join(args.output_dir, BEAT_MIXED_SYNTH_MIX_OUTPUT_FILENAME))
 
 if __name__ == '__main__':
     main()
