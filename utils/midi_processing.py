@@ -237,7 +237,7 @@ class CustomPrettyMIDI(pretty_midi.PrettyMIDI):
         sex: str = "female",
         pitch_range_kind: str = "normal"
     ):
-        '''shift the pitch of whole notes to fit the voice range. 
+        '''shift the pitch of whole notes to fit the voice range.
         The pitch name (e.g. C#) doesn't change, only the octave changes.
         There is no guarantee that all notes will be within pitch_range after the shift.
 
@@ -259,16 +259,10 @@ class CustomPrettyMIDI(pretty_midi.PrettyMIDI):
                 pitch_range must be in ['normal', 'falsetto']
         '''
         SHIFT_PITCH_RANGE_MALE_NORMAL_MIN = 43 #G2
-        SHIFT_PITCH_RANGE_MALE_NORMAL_MAX = 67 #G4
+        SHIFT_PITCH_RANGE_MALE_NORMAL_MAX = 64 #E4
 
-        SHIFT_PITCH_RANGE_MALE_FALSETTO_MIN = 52 #E3
-        SHIFT_PITCH_RANGE_MALE_FALSETTO_MAX = 76 #E5
-
-        SHIFT_PITCH_RANGE_FEMALE_NORMAL_MIN = 52 #E3
-        SHIFT_PITCH_RANGE_FEMALE_NORMAL_MAX = 72 #C5
-
-        SHIFT_PITCH_RANGE_FEMALE_FALSETTO_MIN = 60 #C4
-        SHIFT_PITCH_RANGE_FEMALE_FALSETTO_MAX = 81 #A5
+        SHIFT_PITCH_RANGE_FEMALE_NORMAL_MIN = 48 #C3
+        SHIFT_PITCH_RANGE_FEMALE_NORMAL_MAX = 69 #A4
 
         if isinstance(targets, str):
             assert targets == "all"
@@ -307,7 +301,6 @@ class CustomPrettyMIDI(pretty_midi.PrettyMIDI):
 
             chosen_pitch_shift = first_candidate_pitch_shift
 
-            new_notes = []
             for note_id in range(len(self.instruments[target].notes)):
                 self.instruments[target].notes[note_id].pitch += chosen_pitch_shift * 12
 
@@ -315,7 +308,8 @@ class CustomPrettyMIDI(pretty_midi.PrettyMIDI):
 
     def note_shift(
         self,
-        targets: str | list[int]
+        targets: str | list[int],
+        sex: str = "female"
     ):
         '''shift the pitch of each notes to fit the voice range.
         The pitch name (e.g. C#) doesn't change, only the octave changes.
@@ -324,12 +318,20 @@ class CustomPrettyMIDI(pretty_midi.PrettyMIDI):
         Parameters
         ----------
             targets : str | list[int]
-                List of indices, which indicate id of target instrument for 'monophonization' in self.instruments.
+                List of indices, which indicate id of target instrument for 'note shift' in self.instruments.
                 Each index must be less than length of self.instruments.
                 If you want to qmonophonize all instruments, you can set targets as "all".
+
+            sex : str
+                Specify which sex's vocal range to use for pitch shifting.
+                Must be in ["female", "male"]
         '''
-        SHIFT_PITCH_RANGE_MIN = 41 #F2
-        SHIFT_PITCH_RANGE_MAX = 81 #A5
+        UNISEX_SHIFT_PITCH_RANGE_MIN = 41 #F2
+        UNISEX_SHIFT_PITCH_RANGE_MAX = 81 #A5
+        MALE_SHIFT_PITCH_RANGE_MIN = 43 #G2
+        MALE_SHIFT_PITCH_RANGE_MAX = 64 #E4
+        FEMALE_SHIFT_PITCH_RANGE_MIN = 48 #C3
+        FEMALE_SHIFT_PITCH_RANGE_MAX = 69 #A4
 
         if isinstance(targets, str):
             assert targets == "all"
@@ -341,8 +343,14 @@ class CustomPrettyMIDI(pretty_midi.PrettyMIDI):
         else:
             assert False, "targets should be 'all' or <list[int]>"
 
-        min_pitch = SHIFT_PITCH_RANGE_MIN
-        max_pitch = SHIFT_PITCH_RANGE_MAX
+        assert sex in ["female", "male"]
+
+        if sex == "female":
+            min_pitch = FEMALE_SHIFT_PITCH_RANGE_MIN
+            max_pitch = FEMALE_SHIFT_PITCH_RANGE_MAX
+        else:
+            min_pitch = MALE_SHIFT_PITCH_RANGE_MIN
+            max_pitch = MALE_SHIFT_PITCH_RANGE_MAX
 
         for target in targets:
             for note_id, note in enumerate(self.instruments[target].notes):

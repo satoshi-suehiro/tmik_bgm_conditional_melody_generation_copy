@@ -45,6 +45,7 @@ INFER_SPLIT_SIZE = 512
 AUDIO_FILENAME_EXTENSIONS = [".wav", ".mp3"]
 MIDI_FILENAME_EXTENSIONS = [".midi", ".mid"]
 JSON_FILENAME_EXTENSIONS = [".json"]
+SEXES = ["female", "male"]
 
 SIXTEENTH_TIMES_AND_COUNTINGS_OUTPUT_FILENAME = "sixteenth_times_and_countings.json"
 CONDITONAL_CHORDS_OUTPUT_FILENAME = "conditional_chords.mid"
@@ -201,6 +202,8 @@ def get_args():
     parser.add_argument('--gen_seed', type=int, default=None,
                         help='seed for generation. int. (example) 0')
 
+    parser.add_argument('--sex', type=str, default="female")
+
     parser.add_argument('--output_synth_demo', action="store_true", default=False)
     parser.add_argument('--output_beat_estimation_mix', action="store_true", default=False)
 
@@ -283,6 +286,8 @@ def get_args():
         args.use_handinputed_bpm = True
     else:
         args.use_handinputed_bpm = False
+
+    assert args.sex in SEXES, f"sex must be in {SEXES}"
 
     return args
 
@@ -1023,7 +1028,8 @@ def main():
     midi_obj.dump(TMP_MIDIFILE)
     melody_midi = CustomPrettyMIDI(midi_file=TMP_MIDIFILE)
     melody_midi.perfect_monophonize(targets="all")
-    melody_midi.note_shift(targets="all")
+    melody_midi.whole_shift(targets="all", sex=args.sex)
+    melody_midi.note_shift(targets="all", sex=args.sex)
     melody_midi.remove_invalid_notes()
     if args.from_audio:
         melody_midi = \

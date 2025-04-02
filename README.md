@@ -51,6 +51,9 @@ uv run melody_generation.py --load_path ./checkpoints/checkpoint.pth --bgm_filep
 <br>
 --output_beat_estimation_mix:  
 &emsp;ビート推定結果をミックスしたオーディオを出力するか否かを指定(デバッグ用)  
+<br>
+--sex:  
+&emsp;どちらの性別用のメロディを出力するかを指定。GETMusicの出力メロディを音域処理する際に参照される。[female, male]のいずれか。デフォルトはfemale  
 
 <br>
 
