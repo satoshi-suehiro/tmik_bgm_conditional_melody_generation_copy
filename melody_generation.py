@@ -216,6 +216,7 @@ def get_args():
 
     parser.add_argument('--bpm', type=int, default=None)
     parser.add_argument('--start_time', type=float, default=None)
+    parser.add_argument('--start_bar', type=float, default=None)
 
     parser.add_argument('--load_path', type=str, default=None,
                     help='path to model that need to be loaded, '
@@ -279,6 +280,11 @@ def get_args():
         else:
             assert False, f"Unsupported file extension: {file_extension}. " + \
                     f"Supported extensions are: {', '.join(AUDIO_FILENAME_EXTENSIONS + MIDI_FILENAME_EXTENSIONS)}"
+
+    if args.start_bar is not None:
+        assert args.bpm is not None, "If --start_bar is specified, --bpm must also be specified."
+        sec_per_bar = 60 / args.bpm * 4
+        args.start_time = args.start_bar * sec_per_bar
 
     if (args.bpm is not None and args.start_time is None) or (args.start_time is not None and args.bpm is None):
         assert False, "If either --bpm or --start_time is specified, the other must also be specified."

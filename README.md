@@ -46,6 +46,9 @@ uv run melody_generation.py --load_path ./checkpoints/checkpoint.pth --bgm_filep
 --start_time:  
 &emsp;指定したBPMと開始時間で生成を行うときに指定する。1拍目が始まる時間(s)。これを指定する場合、--bpmも指定しなければならない  
 <br>
+--start_bar:  
+&emsp;指定したBPMと開始小節で生成を行うときに指定する。1拍目が始まるまでの小節数。ただし、4拍子前提であることに注意。小数も入力可能で、例えば3拍目からスタートしたい場合、0.5とすることで対応可能。これを指定する場合、--bpmも指定しなければならない。もし--start_timeも同時に指定されていた場合、こちらが優先される。  
+<br>
 --bpm:  
 &emsp;指定したBPMと開始時間で生成を行うときに指定する。BPM。これを指定する場合、--start_timeも指定しなければならない  
 <br>
