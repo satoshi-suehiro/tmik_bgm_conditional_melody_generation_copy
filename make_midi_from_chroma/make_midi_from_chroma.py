@@ -109,6 +109,42 @@ def make_sixteenth_times_and_countings(
         return beat_times_and_countings
 
 
+def adjust_extreme_beat_times_and_countings(beat_times_and_countings):
+
+    BPM_UPPER_THRESHOLD = 170
+    BPM_LOWER_THRESHOLD = 50
+
+    # calc avg bpm
+    start_time, _ = beat_times_and_countings[0]
+    end_time, _ = beat_times_and_countings[-1]
+    avg_sec_per_beat = (end_time - start_time) / (len(beat_times_and_countings) - 1)
+    avg_bpm = 60 / avg_sec_per_beat
+
+    # too-high bpm to half
+    if avg_bpm > BPM_UPPER_THRESHOLD:
+        beat_times_and_countings = beat_times_and_countings[::2]
+        for i in range(len(beat_times_and_countings)):
+            beat_times_and_countings[i][1] = i%config.beats_per_bar_candidates[0] + 1
+        beat_times_and_countings = clip_beat_times_and_countings(beat_times_and_countings=beat_times_and_countings)
+
+    # too-low bpm to double
+    if avg_bpm < BPM_LOWER_THRESHOLD:
+        new_beat_times_and_countings = []
+        for i in range(len(beat_times_and_countings)):
+            new_beat_times_and_countings.append(beat_times_and_countings[i])
+
+            if i != len(beat_times_and_countings) - 1:
+                new_beat_times_and_countings.append(np.array([(beat_times_and_countings[i+1][0] + beat_times_and_countings[i][0]) / 2, None]))
+
+        beat_times_and_countings = np.array(new_beat_times_and_countings, dtype=beat_times_and_countings.dtype)
+
+        for i in range(len(beat_times_and_countings)):
+            beat_times_and_countings[i][1] = i%config.beats_per_bar_candidates[0] + 1
+        beat_times_and_countings = clip_beat_times_and_countings(beat_times_and_countings=beat_times_and_countings)
+
+    return beat_times_and_countings
+
+
 def sequence_note_pitch_vectors(integrated_chroma):
 
     x = np.zeros([len(integrated_chroma), 12])
@@ -338,6 +374,7 @@ def make_midi_from_chroma(audio_file_path, use_handinputed_bpm=False, start_time
         beat_times_and_countings = downbeat_estimation(wavfile_path=audio_file_path, beats_per_bar_candidates=config.beats_per_bar_candidates)
 
     clipped_beat_times_and_countings = clip_beat_times_and_countings(beat_times_and_countings=beat_times_and_countings)
+    clipped_beat_times_and_countings = adjust_extreme_beat_times_and_countings(beat_times_and_countings=clipped_beat_times_and_countings)
     bar_times = make_bar_times(beat_times_and_countings=clipped_beat_times_and_countings)
 
     if len(bar_times) <= 1:
@@ -439,6 +476,7 @@ def make_midi_by_madmom_chord_recognition(
         beat_times_and_countings = downbeat_estimation(wavfile_path=audio_file_path, beats_per_bar_candidates=config.beats_per_bar_candidates)
 
     clipped_beat_times_and_countings = clip_beat_times_and_countings(beat_times_and_countings=beat_times_and_countings)
+    clipped_beat_times_and_countings = adjust_extreme_beat_times_and_countings(beat_times_and_countings=clipped_beat_times_and_countings)
     bar_times = make_bar_times(beat_times_and_countings=clipped_beat_times_and_countings)
 
     if len(bar_times) <= 1:
