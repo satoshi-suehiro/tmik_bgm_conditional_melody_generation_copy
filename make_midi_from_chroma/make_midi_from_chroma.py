@@ -111,7 +111,7 @@ def make_sixteenth_times_and_countings(
 
 def adjust_extreme_beat_times_and_countings(beat_times_and_countings):
 
-    BPM_UPPER_THRESHOLD = 170
+    BPM_UPPER_THRESHOLD = 180
     BPM_LOWER_THRESHOLD = 50
 
     # calc avg bpm
