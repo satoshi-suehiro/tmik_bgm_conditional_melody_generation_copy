@@ -14,7 +14,7 @@ import numpy as np
 
 def make_downbeat_array_by_handinputed_bpm(audio_filepath, start_time, bpm):
     if start_time == 0:
-        start_time = 1e-10
+        start_time = 4e-6
 
     duration = librosa.get_duration(path=audio_filepath)
     time_per_beat = 60.0 / bpm

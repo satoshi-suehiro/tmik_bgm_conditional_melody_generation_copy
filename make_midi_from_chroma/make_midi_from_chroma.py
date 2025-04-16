@@ -113,6 +113,12 @@ def adjust_extreme_beat_times_and_countings(beat_times_and_countings):
 
     BPM_UPPER_THRESHOLD = 180
     BPM_LOWER_THRESHOLD = 50
+    MIN_OFFSET_TIME = 4e-6
+
+    # If start_time is less than the minimum time, set it to the minimum time.
+    start_time, _ = beat_times_and_countings[0]
+    if start_time < MIN_OFFSET_TIME:
+        beat_times_and_countings[0][0] = MIN_OFFSET_TIME
 
     # calc avg bpm
     start_time, _ = beat_times_and_countings[0]
