@@ -979,7 +979,8 @@ def main():
 
         if args.output_beat_estimation_mix:
             times = [sixteenth_time_and_counting[0] for i, sixteenth_time_and_counting in enumerate(clipped_sixteenth_times_and_countings) if i%4==0]
-            make_clicked_audio(audio_filepath=args.bgm_filepath, times=times, output_path=os.path.join(args.output_dir, BEAT_MIXED_BACKMUSIC_OUTPUT_FILENAME))
+            make_clicked_audio(audio_filepath=args.bgm_filepath, times=times, output_path=os.path.join(args.output_dir, BEAT_MIXED_BACKMUSIC_OUTPUT_FILENAME),
+                               audio_weight=1, click_weight=1)
 
     else:
         conditional_midi = CustomPrettyMIDI(midi_file=args.bgm_filepath)
@@ -1058,8 +1059,8 @@ def main():
         sf.write(os.path.join(args.output_dir, MIXED_AUDIO_OUTPUT_FILENAME), mixed_audio, OUTPUT_SR)
 
         if args.output_beat_estimation_mix:
-            make_clicked_audio(audio_filepath=os.path.join(args.output_dir, MELODY_AUDIO_OUTPUT_FILENAME), times=times, output_path=os.path.join(args.output_dir, BEAT_MIXED_SYNTH_MELODY_OUTPUT_FILENAME))
-            make_clicked_audio(audio_filepath=os.path.join(args.output_dir, MIXED_AUDIO_OUTPUT_FILENAME), times=times, output_path=os.path.join(args.output_dir, BEAT_MIXED_SYNTH_MIX_OUTPUT_FILENAME))
+            make_clicked_audio(audio_filepath=os.path.join(args.output_dir, MELODY_AUDIO_OUTPUT_FILENAME), times=times, output_path=os.path.join(args.output_dir, BEAT_MIXED_SYNTH_MELODY_OUTPUT_FILENAME), audio_weight=1, click_weight=1)
+            make_clicked_audio(audio_filepath=os.path.join(args.output_dir, MIXED_AUDIO_OUTPUT_FILENAME), times=times, output_path=os.path.join(args.output_dir, BEAT_MIXED_SYNTH_MIX_OUTPUT_FILENAME), audio_weight=1, click_weight=1)
 
 if __name__ == '__main__':
     main()
